@@ -15,7 +15,11 @@
 #include <boost/property_tree/json_parser.hpp>
 #include <boost/uuid/uuid.hpp>
 #include <boost/uuid/uuid_generators.hpp>
-#include <boost/uuid/uuid_io.hpp> 
+#include <boost/uuid/uuid_io.hpp>
+#include <boost/log/core.hpp>
+#include <boost/log/trivial.hpp>
+#include <boost/log/expressions.hpp>
+#include <boost/log/utility/setup/file.hpp>
 
 #define STR_EXPAND(tok) #tok
 #define STR(tok) STR_EXPAND(tok)
@@ -25,7 +29,6 @@ namespace FS = LMFocusStack;
 namespace bfs = boost::filesystem;
 
 using FS::ImageServer;
-
 FS::ImageServer::ImageServer(int argc, char ** argv) {
   
 	if (argc < 2) 
@@ -202,6 +205,9 @@ ptree FS::ImageServer::read_settings_(ptree pt)
  */
 {
   std::cout << "Start of read_settings_" << std::endl;
+  log_init();
+
+  BOOST_LOG_TRIVIAL(trace) << "A trace severity message";
   
   try {
     
@@ -248,7 +254,7 @@ void FS::ImageServer::create_update_db_()
   
   std::string directory = "FSImSrvDb";
   std::string dirpath =
-	pt.get<std::string>("Network.working_directory");
+    pt.get<std::string>("Network.working_directory");
   
   // set current path before directory is created
   current_path(dirpath);
@@ -382,8 +388,10 @@ void FS::ImageServer::create_new_stack_(tcp::socket& sock)
 void FS::ImageServer::db_logic_(boost::asio::ip::tcp::socket& sock,
 				FrameReadState * rs)
 {
+  std::cout << "db_logic_\n" << std::endl;
   std::string sHead;
-  for(size_t i = 0; i < HEADER_LEN; i++) sHead += rs->header[i];
+  for(size_t i = 0; i <= HEADER_LEN; i++) sHead += rs->header[i];
+  std::cout << sHead << std::endl;
   if (sHead == "PING")
     process_ping_(sock);
   else if (sHead == "GTID")
@@ -478,5 +486,15 @@ void FS::ImageServer::detect_start_msg_(char * data, FrameReadState *rs)
     }
   }
   rs->data_index += i;
+}
+
+void FS::ImageServer::log_init()
+{
+    logging::add_file_log("sample.log");
+
+    logging::core::get()->set_filter
+    (
+        logging::trivial::severity >= logging::trivial::info
+    );
 }
 
