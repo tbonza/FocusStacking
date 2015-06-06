@@ -26,6 +26,7 @@ parse_ping_reply (char * reply, size_t reply_length,
 		}
 		s += reply[i];
 	}
+	std::cout << "parsing reply " << s << std::endl;
 	return s;
 }
 
@@ -58,16 +59,16 @@ int main(int argc, char* argv[])
     std::string rs;
     while ( ! end_found ) {
     	size_t reply_length = boost::asio::read(s,
-        boost::asio::buffer(reply, request_length));
+        boost::asio::buffer(reply, 1));
 	rs += parse_ping_reply(reply, reply_length, 
 		start_found, end_found);
-	//std::cout << "Reply length is " << reply_length << std::endl;
+	std::cout << "Reply length is " << reply_length << std::endl;
 
 	}
-    //std::cout 
-    //  << "Found: " << rs 
-    //  << " Start: " << start_found 
-    //  << " End: " << end_found << std::endl;
+    std::cout 
+      << "Found: " << rs 
+      << " Start: " << start_found 
+      << " End: " << end_found << std::endl;
 
     // print out the ping 
     std::cout << rs << "\n";
