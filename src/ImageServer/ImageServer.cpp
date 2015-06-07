@@ -1,4 +1,3 @@
-
 #include "ImageServer.h"
 #include <iostream>
 #include <stdexcept>
@@ -45,6 +44,9 @@ void FS::ImageServer::start_server() {
 	std::cout << "Starting server at " << port_ 
 			<< " ..." << std::endl;
 	using boost::asio::ip::tcp;
+	
+	// detect if database folder already exists otherwise create one
+	create_db_ifmissing_();
 
 	boost::asio::io_service io_service;
 
@@ -145,30 +147,6 @@ std::map<std::thread::id, FS::ImageServer::state_t> *
 	= new std::map<std::thread::id, FS::ImageServer::state_t>();
 
 using boost::asio::ip::tcp;
-// Using for echo example
-/*void FS::ImageServer::session_(tcp::socket sock)
-{
-  const std::thread::id tid = std::this_thread::get_id();
-  state_t state = waiting_for_start;
-  state_map_->insert(std::pair<std::thread::id, state_t>(tid,state));
-  for(;;)
-    {
-      char data[max_msg_len];
-
-      boost::system::error_code error;
-      size_t length = sock.read_some(boost::asio::buffer(data), error);
-      std::cout << "Read " << length << " bytes from client" << std::endl;
-      if (error == boost::asio::error::eof)
-	break; // Connection closed cleanly by peer.
-      else if (error)
-    
-	throw boost::system::system_error(error); // Some other error.
-
-	boost::asio::write(sock, boost::asio::buffer(data, length));
-    }
-  
-}
-*/
 
 FS::ImageServer::state_t FS::ImageServer::get_state_()
 {
@@ -197,7 +175,6 @@ void FS::ImageServer::parse_frame_id_(char * data, FrameReadState * rs)
   }
   rs->data_index = i;
 }
-
 
 using namespace boost::property_tree;
 ptree FS::ImageServer::read_settings_(ptree pt)
@@ -232,63 +209,6 @@ ptree FS::ImageServer::read_settings_(ptree pt)
     return pt;
   }
   
-}
-
-using namespace boost::property_tree;
-using namespace boost::filesystem;
-void FS::ImageServer::create_update_db_()
-/* According to DatabaseFormat.md, we need to:
- * 1b) create or update a database directory
- */
-{
-  ptree pt;
-  pt = read_settings_( pt ); // not sure if this is done correctly
-  
-  std::cout << pt.get<std::string>
-    ("Network.port") <<std::endl;
-  
-  std::cout << "Settings file exists: " << settings_path_ << std::endl;
-
-  // If a settings_path isn't given then use the /tmp/ directory
-  // Assuming linux environment.
-  std::cout << "Working directory: " << current_path() << std::endl;
-  
-  std::string directory = "FSImSrvDb";
-  std::string dirpath =
-    pt.get<std::string>("Network.working_directory");
-  
-  // set current path before directory is created
-  current_path(dirpath);
-  
-    
-  if (exists(current_path()))
-    {
-      if (is_directory(directory))
-	{
-	  //std::cout << "Yes FSImSrvDb is a directory in /tmp/" <<
-	  //  std:: endl <<
-	  //  "File size in folder: " << file_size("FSImSrvDb/uuid")
-	  //  << std::endl;
-	  //create_directory("FSImSrvDb/testing");
-	  //std::cout << "New directory created: " <<
-	  //  is_directory("FSImSrvDb/testing") << std::endl;
-	    
-	}
-      else if (!is_directory(directory))
-	{
-	  // Attempt to get filepath from settings file.  
-	  create_directory(dirpath + directory);
-	}
-      else
-	{
-	  //std::cout << "No FSImSrvDb is not a directory" << std::endl;
-	  if (!is_directory(directory)){
-	    std::cout << "No FSImSrvDb is not a directory" << std::endl;
-	    //throw
-	    //  boost::system::system_error("No FSImSrvDb is not a directory");
-	  }
-	}
-    }
 }
 
 using namespace boost::uuids;
@@ -369,7 +289,6 @@ void FS::ImageServer::process_ping_(tcp::socket& sock)
   size_t length = std::strlen(data);
   boost::asio::write(sock, boost::asio::buffer(data, length));
   std::cout << "Wrote " << length << " characters." << std::endl;
-  boost::asio::flush();
   // reset the state to process the next input
   set_state_(waiting_for_start);
 }
@@ -386,8 +305,6 @@ void FS::ImageServer::create_new_stack_(tcp::socket& sock)
   // reset the state to process the next input
   set_state_(waiting_for_start);
 }
-
-
 
 void FS::ImageServer::db_logic_(boost::asio::ip::tcp::socket& sock,
 				FrameReadState * rs)
@@ -409,8 +326,12 @@ void FS::ImageServer::db_logic_(boost::asio::ip::tcp::socket& sock,
 }
 
 
-// Using for not echo example
-void FS::ImageServer::session_(tcp::socket sock)
+/**
+ * This function is called for each client connection. It is a separate thread
+ * of its own.
+ */
+void 
+FS::ImageServer::session_(tcp::socket sock)
 {
   try {
   // get id for the current thread
@@ -495,7 +416,8 @@ void FS::ImageServer::detect_start_msg_(char * data, FrameReadState *rs)
     }
   }
   rs->data_index = i;
-  std::cout << "Start of frame detected ..." << std::endl;
+  if ( get_state_() == reading_header )
+  	std::cout << "Start of frame detected ..." << std::endl;
 }
 
 void FS::ImageServer::log_init()
